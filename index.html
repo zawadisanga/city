@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>ZAS | Calling + M-Pesa</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+<script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Inter', sans-serif; background: #000; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; }
+.screen { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; overflow-y: auto; animation: fadeIn 0.3s; }
+.screen.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* Splash */
+.splash-screen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #0a0a0a; display: flex; align-items: center; justify-content: center; z-index: 9999; animation: fadeOut 1.5s 2s forwards; }
+@keyframes fadeOut { to { opacity: 0; visibility: hidden; } }
+.splash-logo { text-align: center; }
+.splash-logo i { font-size: 70px; color: #10b981; animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+.splash-logo h1 { color: white; font-size: 48px; margin-top: 20px; }
+
+/* Auth */
+.auth-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; background: #0a0a0a; }
+.auth-card { max-width: 400px; width: 100%; padding: 40px 30px; background: #111; border-radius: 40px; border: 1px solid #2a2a2a; text-align: center; }
+.auth-card h1 { font-size: 36px; color: white; margin: 20px 0 10px; }
+.auth-card h1 span { color: #10b981; }
+.auth-card p { color: #9ca3af; margin-bottom: 30px; }
+.input-group { display: flex; align-items: center; background: #1a1a1a; border-radius: 20px; padding: 14px 18px; margin-bottom: 16px; border: 1px solid #2a2a2a; }
+.input-group i { color: #10b981; margin-right: 12px; }
+.input-group input, .input-group select { background: transparent; border: none; color: white; font-size: 16px; width: 100%; outline: none; }
+.auth-card button { width: 100%; padding: 14px; background: #10b981; border: none; border-radius: 25px; color: white; font-size: 16px; font-weight: 600; cursor: pointer; }
+.free-badge { margin-top: 20px; padding: 10px; background: rgba(16,185,129,0.15); border-radius: 15px; color: #10b981; font-size: 12px; }
+
+/* Phone Frame */
+.phone-frame { width: 100%; max-width: 400px; height: 100vh; max-height: 750px; background: #0a0a0a; border-radius: 55px; border: 1px solid #2a2a2a; margin: 0 auto; overflow-y: auto; }
+.status-bar { display: flex; justify-content: space-between; padding: 20px 24px 10px; color: white; }
+.clock-widget { text-align: center; margin: 10px 20px; padding: 20px; background: #111; border-radius: 35px; border: 1px solid #2a2a2a; }
+.time { font-size: 56px; font-weight: 600; color: white; }
+.date { font-size: 14px; color: #9ca3af; margin-top: 5px; }
+.balance-card { margin: 15px 20px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 25px; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
+.balance-info { display: flex; flex-direction: column; }
+.balance-label { font-size: 12px; color: rgba(255,255,255,0.8); }
+.balance-amount { font-size: 24px; font-weight: 700; color: white; }
+.add-funds-btn { background: rgba(255,255,255,0.2); border: none; padding: 8px 16px; border-radius: 30px; color: white; cursor: pointer; }
+.rates-section { margin: 10px 20px; background: #111; border-radius: 25px; padding: 12px 16px; border: 1px solid #2a2a2a; }
+.rates-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+.rate-type { color: white; }
+.rate-value { color: #10b981; font-weight: 600; }
+.online-users-section { margin: 15px 20px; }
+.section-header { display: flex; justify-content: space-between; color: white; margin-bottom: 12px; }
+.online-count { background: rgba(16,185,129,0.2); padding: 4px 10px; border-radius: 20px; color: #10b981; }
+.user-item { display: flex; align-items: center; gap: 12px; background: #111; border-radius: 20px; padding: 12px; margin-bottom: 10px; border: 1px solid #2a2a2a; }
+.user-avatar { width: 50px; height: 50px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 25px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; color: white; }
+.user-info { flex: 1; }
+.user-name { font-weight: 600; color: white; }
+.user-status { font-size: 11px; }
+.user-status.online { color: #10b981; }
+.user-status.busy { color: #f59e0b; }
+.call-buttons { display: flex; gap: 8px; }
+.call-btn { width: 40px; height: 40px; border-radius: 20px; border: none; font-size: 18px; cursor: pointer; background: #1a1a1a; color: white; }
+.call-btn:disabled { opacity: 0.5; }
+.call-btn.voice:hover:not(:disabled) { background: #10b981; }
+.call-btn.video:hover:not(:disabled) { background: #059669; }
+.dock { position: sticky; bottom: 15px; margin: 20px 15px 15px; height: 70px; background: #111; border-radius: 40px; display: flex; justify-content: space-around; align-items: center; border: 1px solid #2a2a2a; }
+.dock-icon { background: transparent; border: none; padding: 8px 12px; border-radius: 25px; cursor: pointer; color: #9ca3af; font-size: 20px; }
+.dock-icon.active { background: rgba(16,185,129,0.2); color: #10b981; }
+
+/* Call Screen */
+.call-screen { background: #000; }
+.call-container { height: 100%; display: flex; flex-direction: column; position: relative; }
+.remote-video-wrapper { flex: 1; background: #1a1a1a; }
+#remoteVideo { width: 100%; height: 100%; object-fit: cover; }
+.local-video-wrapper { position: absolute; bottom: 120px; right: 16px; width: 100px; height: 150px; border-radius: 16px; overflow: hidden; border: 2px solid #10b981; background: #000; }
+#localVideo { width: 100%; height: 100%; object-fit: cover; }
+.local-video-label { position: absolute; bottom: 5px; left: 5px; background: rgba(0,0,0,0.6); padding: 2px 8px; border-radius: 10px; font-size: 10px; color: white; }
+.call-info-panel { position: absolute; top: 40px; left: 0; right: 0; text-align: center; background: rgba(0,0,0,0.7); padding: 15px; }
+.caller-name { font-size: 20px; font-weight: bold; color: white; }
+.call-status { font-size: 14px; color: #9ca3af; }
+.call-timer { font-size: 36px; font-weight: bold; font-family: monospace; color: #10b981; margin-top: 5px; }
+.call-controls-panel { position: absolute; bottom: 30px; left: 0; right: 0; display: flex; justify-content: center; gap: 30px; padding: 20px; }
+.control-btn { width: 60px; height: 60px; border-radius: 50%; border: none; font-size: 24px; cursor: pointer; background: #1a1a1a; color: white; }
+.end-call { background: #dc2626; }
+.hide { display: none !important; }
+
+/* Modals */
+.modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.95); z-index: 1000; align-items: center; justify-content: center; }
+.modal.show { display: flex; }
+.modal-content { background: #111; border-radius: 40px; padding: 30px; width: 90%; max-width: 350px; border: 1px solid #2a2a2a; }
+.modal-content h3 { color: white; text-align: center; margin-bottom: 20px; }
+.modal-content button { width: 100%; padding: 14px; background: #10b981; border: none; border-radius: 25px; color: white; font-weight: 600; cursor: pointer; margin-top: 10px; }
+.modal-content .cancel-btn { background: #333; }
+.preset-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
+.preset-btn { flex: 1; padding: 10px; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 20px; color: #10b981; cursor: pointer; margin-top: 0 !important; }
+
+.incoming-modal { text-align: center; }
+.incoming-ringing { font-size: 60px; color: #10b981; animation: ring 1s infinite; margin-bottom: 20px; }
+@keyframes ring { 0%,100% { transform: rotate(0deg); } 25% { transform: rotate(15deg); } 75% { transform: rotate(-15deg); } }
+.incoming-caller-name { font-size: 24px; font-weight: bold; color: white; }
+.incoming-actions { display: flex; gap: 15px; justify-content: center; margin-top: 20px; }
+.accept-call, .reject-call { padding: 12px 30px; border: none; border-radius: 30px; font-weight: 600; cursor: pointer; }
+.accept-call { background: #10b981; color: white; }
+.reject-call { background: #dc2626; color: white; }
+
+/* Toast */
+.toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(100px); background: #1a1a1a; padding: 12px 24px; border-radius: 50px; color: white; font-size: 14px; z-index: 1100; transition: transform 0.3s; border: 1px solid #10b981; }
+.toast.show { transform: translateX(-50%) translateY(0); }
+.empty-state { text-align: center; padding: 40px; color: #6b7280; }
+</style>
+</head>
+<body>
+
+<!-- Splash -->
+<div id="splashScreen" class="splash-screen"><div class="splash-logo"><i class="fas fa-phone-alt"></i><h1>ZAS</h1></div></div>
+
+<!-- Auth -->
+<div id="authScreen" class="screen"><div class="auth-container"><div class="auth-card"><i class="fas fa-phone-alt" style="font-size:50px;color:#10b981;"></i><h1>ZAS<span>Call</span></h1><p>Calling + M-Pesa</p><div class="input-group"><i class="fas fa-user"></i><input type="text" id="username" placeholder="Username"></div><button onclick="registerUser()">Start Free</button><div class="free-badge"><i class="fas fa-gift"></i> Get $0.10 FREE credit</div><p style="margin-top:20px;font-size:11px;color:#6b7280;">❌ No block feature</p></div></div></div>
+
+<!-- Main App -->
+<div id="appScreen" class="screen"><div class="phone-frame"><div class="status-bar"><span>📶</span><span>ZAS</span><span>🔋 <span id="battery">100</span>%</span></div><div class="clock-widget"><div class="time" id="clock">--:--</div><div class="date" id="date">Loading...</div></div><div class="balance-card"><div class="balance-info"><span class="balance-label">💰 My Wallet</span><span class="balance-amount" id="walletBalance">$0.00</span></div><button class="add-funds-btn" onclick="showAddFundsModal()">+ Add</button></div><div class="rates-section"><div class="rates-title">📞 Call Rates</div><div class="rates-row"><span>🎤 Voice</span><span>$0.01/min</span></div><div class="rates-row"><span>🎥 Video</span><span>$0.03/min</span></div></div><div class="online-users-section"><div class="section-header"><span><i class="fas fa-users"></i> Online</span><span class="online-count" id="onlineCount">0</span></div><div id="onlineUsersList"></div></div><div class="dock"><button class="dock-icon active" onclick="switchTab('home')"><i class="fas fa-home"></i></button><button class="dock-icon" onclick="switchTab('wallet')"><i class="fas fa-coins"></i></button><button class="dock-icon" onclick="showHistory()"><i class="fas fa-history"></i></button><button class="dock-icon" onclick="logout()"><i class="fas fa-sign-out-alt"></i></button></div></div></div>
+
+<!-- Call Screen -->
+<div id="callScreen" class="screen call-screen"><div class="call-container"><div class="remote-video-wrapper"><video id="remoteVideo" autoplay playsinline></video></div><div class="local-video-wrapper" id="localVideoWrapper"><video id="localVideo" autoplay muted playsinline></video><div class="local-video-label">You</div></div><div class="call-info-panel"><div id="callWithName" class="caller-name">Calling...</div><div id="callStatus" class="call-status">Connecting</div><div id="callTimer" class="call-timer">00:00</div></div><div class="call-controls-panel"><button class="control-btn" id="micBtn" onclick="toggleMic()"><i class="fas fa-microphone"></i></button><button class="control-btn" id="camBtn" onclick="toggleCam()"><i class="fas fa-video"></i></button><button class="control-btn end-call" onclick="hangUp()"><i class="fas fa-phone-slash"></i></button></div></div></div>
+
+<!-- Incoming Call Modal -->
+<div id="incomingModal" class="modal"><div class="modal-content incoming-modal"><div class="incoming-ringing"><i class="fas fa-phone-alt"></i></div><div id="incomingName" class="incoming-caller-name">Caller</div><div id="incomingType" class="incoming-call-type">Voice Call</div><div class="incoming-actions"><button class="accept-call" onclick="acceptCall()">Accept</button><button class="reject-call" onclick="rejectCall()">Reject</button></div></div></div>
+
+<!-- Add Funds Modal (M-Pesa) -->
+<div id="addFundsModal" class="modal"><div class="modal-content"><h3><i class="fas fa-plus-circle"></i> Add Funds</h3><div class="preset-buttons"><button class="preset-btn" onclick="setAmount(1000)">TZS 1,000</button><button class="preset-btn" onclick="setAmount(5000)">TZS 5,000</button><button class="preset-btn" onclick="setAmount(10000)">TZS 10,000</button><button class="preset-btn" onclick="setAmount(20000)">TZS 20,000</button></div><div class="input-group"><i class="fas fa-dollar-sign"></i><input type="number" id="amountInput" placeholder="Amount (TZS)" step="1000" min="1000"></div><div class="input-group"><i class="fas fa-phone"></i><input type="tel" id="phoneNumber" placeholder="M-Pesa number (e.g., 0712345678)"></div><button onclick="processMpesaPayment()">Pay with M-Pesa</button><button class="cancel-btn" onclick="closeModal('addFundsModal')">Cancel</button><p style="color:#9ca3af; font-size:11px; text-align:center; margin-top:15px;">💰 Rates: $1 USD = 2,500 TZS</p></div></div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<script>
+// ========================================
+// ZAS UNIFIED - CALLING + M-PESA
+// ========================================
+
+let socket = null;
+let currentUser = { id: null, username: null, balance: 0 };
+let currentCall = null;
+let localStream = null;
+let peerConnection = null;
+let callTimer = null;
+let callStartTime = null;
+let pendingCall = null;
+
+const STUN_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+
+// ========================================
+// AUTH & INIT
+// ========================================
+
+async function registerUser() {
+  const username = document.getElementById('username').value.trim();
+  if (!username) return showToast('Enter username', true);
+  
+  try {
+    const res = await fetch('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username })
+    });
+    const data = await res.json();
+    if (res.ok || data.userId) {
+      currentUser = { id: data.userId, username, balance: data.balance };
+      localStorage.setItem('zas_user', JSON.stringify(currentUser));
+      connectSocket();
+      showApp();
+      showToast(`Welcome ${username}! $${data.balance} free credit.`);
+    }
+  } catch(e) { showToast('Network error', true); }
+}
+
+function connectSocket() {
+  if (socket) socket.disconnect();
+  socket = io();
+  
+  socket.on('user-data', (data) => { currentUser.balance = data.balance; updateBalance(); });
+  socket.on('online-users', (users) => { displayUsers(users); document.getElementById('onlineCount').innerText = users.length; });
+  socket.on('incoming-call', (data) => { pendingCall = data; document.getElementById('incomingName').innerText = data.callerName; document.getElementById('incomingType').innerHTML = data.callType === 'voice' ? '📞 Voice Call' : '🎥 Video Call'; document.getElementById('incomingModal').classList.add('show'); });
+  socket.on('call-accepted', async () => { if (currentCall && currentCall.status === 'calling') { document.getElementById('callStatus').innerText = 'Connected'; await createPeerConnection(true); } });
+  socket.on('call-connected', () => startTimer());
+  socket.on('call-rejected', () => { showToast('Call rejected'); cleanupCall(); });
+  socket.on('call-ended', (data) => { showToast(data.message); cleanupCall(); updateBalance(); });
+  socket.on('balance-update', (data) => { currentUser.balance = data.balance; updateBalance(); });
+  socket.on('call-error', (data) => { showToast(data.message, true); cleanupCall(); });
+  
+  socket.on('offer', async (data) => {
+    if (!peerConnection) await createPeerConnection(false);
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    const answer = await peerConnection.createAnswer();
+    await peerConnection.setLocalDescription(answer);
+    socket.emit('answer', { targetUserId: data.fromUserId, callId: data.callId, sdp: answer });
+  });
+  socket.on('answer', async (data) => { if (peerConnection) await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp)); });
+  socket.on('ice-candidate', async (data) => { if (peerConnection && data.candidate) await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate)); });
+  
+  socket.emit('user-join', { userId: currentUser.id, username: currentUser.username });
+}
+
+function showApp() {
+  document.getElementById('splashScreen').style.display = 'none';
+  document.getElementById('authScreen').classList.remove('active');
+  document.getElementById('appScreen').classList.add('active');
+  updateBalance();
+  setInterval(updateClock, 1000);
+  updateClock();
+  loadOnlineUsers();
+}
+
+function updateBalance() {
+  document.getElementById('walletBalance').innerText = `$${currentUser.balance.toFixed(2)}`;
+}
+
+function loadOnlineUsers() { if (socket) socket.emit('get-online-users'); }
+
+function displayUsers(users) {
+  const container = document.getElementById('onlineUsersList');
+  const others = users.filter(u => u.userId !== currentUser.id);
+  if (!others.length) { container.innerHTML = '<div class="empty-state">No users online</div>'; return; }
+  container.innerHTML = others.map(u => `
+    <div class="user-item"><div class="user-avatar">${u.username.charAt(0).toUpperCase()}</div><div class="user-info"><div class="user-name">${escapeHtml(u.username)}</div><div class="user-status ${u.inCall ? 'busy' : 'online'}">${u.inCall ? '🔴 In call' : '🟢 Online'}</div></div><div class="call-buttons"><button class="call-btn voice" onclick="startCall('${u.userId}','${escapeHtml(u.username)}','voice')" ${u.inCall ? 'disabled' : ''}>📞</button><button class="call-btn video" onclick="startCall('${u.userId}','${escapeHtml(u.username)}','video')" ${u.inCall ? 'disabled' : ''}>🎥</button></div></div>
+  `).join('');
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.dock-icon').forEach((btn, i) => { btn.classList.toggle('active', (tab === 'home' && i === 0) || (tab === 'wallet' && i === 1)); });
+  if (tab === 'wallet') updateBalance();
+}
+
+function showHistory() { alert('Call history coming soon'); }
+
+function logout() { localStorage.removeItem('zas_user'); if (socket) socket.disconnect(); location.reload(); }
+
+// ========================================
+// CALLING FUNCTIONS
+// ========================================
+
+async function startCall(calleeId, calleeName, type) {
+  if (currentCall) return showToast('Already in a call', true);
+  if (currentUser.balance < 0.05) { showToast(`Insufficient balance: $${currentUser.balance.toFixed(2)}`, true); showAddFundsModal(); return; }
+  if (!confirm(`Start ${type} call with ${calleeName}? Rate: $${type === 'voice' ? 0.01 : 0.03}/min`)) return;
+  
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video: type === 'video', audio: true });
+    document.getElementById('localVideo').srcObject = localStream;
+    document.getElementById('localVideoWrapper').classList.toggle('hide', type !== 'video');
+    socket.emit('call-start', { callerId: currentUser.id, callerName: currentUser.username, calleeId, callType: type });
+    currentCall = { id: null, calleeId, calleeName, type, status: 'calling' };
+    document.getElementById('appScreen').classList.remove('active');
+    document.getElementById('callScreen').classList.add('active');
+    document.getElementById('callWithName').innerText = calleeName;
+    document.getElementById('callStatus').innerText = 'Ringing...';
+  } catch(e) { showToast('Cannot access camera/mic', true); }
+}
+
+function acceptCall() {
+  if (!pendingCall) return;
+  (async () => {
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ video: pendingCall.callType === 'video', audio: true });
+      document.getElementById('localVideo').srcObject = localStream;
+      document.getElementById('localVideoWrapper').classList.toggle('hide', pendingCall.callType !== 'video');
+      socket.emit('call-accept', { callId: pendingCall.callId, calleeId: currentUser.id });
+      currentCall = { id: pendingCall.callId, callerId: pendingCall.callerId, callerName: pendingCall.callerName, type: pendingCall.callType, status: 'connected' };
+      document.getElementById('appScreen').classList.remove('active');
+      document.getElementById('callScreen').classList.add('active');
+      document.getElementById('callWithName').innerText = pendingCall.callerName;
+      document.getElementById('incomingModal').classList.remove('show');
+      pendingCall = null;
+    } catch(e) { showToast('Cannot access camera/mic', true); rejectCall(); }
+  })();
+}
+
+function rejectCall() { if (pendingCall) { socket.emit('call-reject', { callId: pendingCall.callId }); pendingCall = null; } document.getElementById('incomingModal').classList.remove('show'); }
+
+function hangUp() { if (currentCall) socket.emit('call-end', { callId: currentCall.id || 'temp_' + Date.now(), userId: currentUser.id }); cleanupCall(); }
+
+function cleanupCall() {
+  if (callTimer) clearInterval(callTimer);
+  if (peerConnection) peerConnection.close();
+  if (localStream) localStream.getTracks().forEach(t => t.stop());
+  currentCall = null; pendingCall = null; callStartTime = null; peerConnection = null; localStream = null;
+  document.getElementById('callScreen').classList.remove('active');
+  document.getElementById('appScreen').classList.add('active');
+  document.getElementById('remoteVideo').srcObject = null;
+  document.getElementById('localVideo').srcObject = null;
+  updateBalance();
+}
+
+async function createPeerConnection(isCaller) {
+  peerConnection = new RTCPeerConnection({ iceServers: STUN_SERVERS });
+  if (localStream) localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
+  peerConnection.ontrack = e => { const remote = document.getElementById('remoteVideo'); if (remote) remote.srcObject = e.streams[0]; };
+  peerConnection.onicecandidate = e => { if (e.candidate && currentCall) socket.emit('ice-candidate', { targetUserId: currentCall.calleeId || currentCall.callerId, callId: currentCall.id || 'temp', candidate: e.candidate }); };
+  if (isCaller && currentCall.status === 'calling') {
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+    socket.emit('offer', { targetUserId: currentCall.calleeId, callId: currentCall.id || 'temp', sdp: offer });
+  }
+}
+
+function startTimer() {
+  callStartTime = Date.now();
+  callTimer = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+    document.getElementById('callTimer').innerText = `${Math.floor(elapsed / 60)}:${(elapsed % 60).toString().padStart(2,'0')}`;
+  }, 1000);
+}
+
+function toggleMic() { if (localStream) { const track = localStream.getAudioTracks()[0]; if (track) { track.enabled = !track.enabled; document.getElementById('micBtn').style.background = track.enabled ? '#1a1a1a' : '#dc2626'; } } }
+function toggleCam() { if (localStream) { const track = localStream.getVideoTracks()[0]; if (track) { track.enabled = !track.enabled; document.getElementById('camBtn').style.background = track.enabled ? '#1a1a1a' : '#dc2626'; document.getElementById('localVideoWrapper').classList.toggle('hide', !track.enabled); } } }
+
+// ========================================
+// M-PESA PAYMENT FUNCTIONS
+// ========================================
+
+function showAddFundsModal() { document.getElementById('addFundsModal').classList.add('show'); }
+function closeModal(modalId) { document.getElementById(modalId).classList.remove('show'); }
+function setAmount(amount) { document.getElementById('amountInput').value = amount; }
+
+async function processMpesaPayment() {
+  const tzsAmount = parseFloat(document.getElementById('amountInput').value);
+  const phoneNumber = document.getElementById('phoneNumber').value.trim();
+  
+  if (!tzsAmount || tzsAmount < 1000) { showToast('Minimum amount is TZS 1,000', true); return; }
+  if (!phoneNumber) { showToast('Phone number required', true); return; }
+  
+  showToast('Processing M-Pesa payment...');
+  
+  try {
+    const res = await fetch('/api/mpesa/deposit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: currentUser.id, amount: tzsAmount, phoneNumber: phoneNumber })
+    });
+    const data = await res.json();
+    if (data.success) {
+      currentUser.balance = data.newBalance;
+      updateBalance();
+      showToast(`TZS ${tzsAmount} added! New balance: $${currentUser.balance.toFixed(2)}`);
+      closeModal('addFundsModal');
+      document.getElementById('phoneNumber').value = '';
+      document.getElementById('amountInput').value = '';
+      localStorage.setItem('zas_user', JSON.stringify(currentUser));
+    } else {
+      showToast(data.error || 'Payment failed', true);
+    }
+  } catch(e) { showToast('Payment error', true); }
+}
+
+// ========================================
+// UTILITIES
+// ========================================
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').innerText = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+  document.getElementById('date').innerText = now.toLocaleDateString('sw', { weekday: 'long', month: 'long', day: 'numeric' });
+  document.getElementById('battery').innerText = Math.floor(Math.random() * 20) + 80;
+}
+
+function showToast(msg, isErr = false) {
+  const toast = document.getElementById('toast');
+  toast.innerText = msg;
+  toast.style.background = isErr ? '#dc2626' : '#1a1a1a';
+  toast.style.border = isErr ? 'none' : '1px solid #10b981';
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+
+// ========================================
+// INIT
+// ========================================
+
+document.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('zas_user');
+  if (saved) {
+    try { const parsed = JSON.parse(saved); currentUser = parsed; connectSocket(); showApp(); } catch(e) {}
+  } else {
+    setTimeout(() => { document.getElementById('splashScreen').style.display = 'none'; document.getElementById('authScreen').classList.add('active'); }, 2000);
+  }
+});
+</script>
+</body>
+</html>
